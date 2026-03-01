@@ -1,72 +1,61 @@
 import streamlit as st
 import dropbox
-from streamlit.components.v1 import html
 
-# --- 1. Dropboxの設定 ---
-# StreamlitのSecretsに登録したトークンを読み込みます
+# --- 1. Dropbox設定 ---
 TOKEN = st.secrets["DROPBOX_TOKEN"]
 dbx = dropbox.Dropbox(TOKEN)
-
-st.set_page_config(page_title="iPhone Dropbox Editor", layout="centered")
-st.title("📝 Dropbox Editor")
-
-# --- 2. ファイルの読み込み設定 ---
-# Dropbox内の /note.txt というファイルを編集します
 FILE_PATH = "/note.txt"
 
+st.set_page_config(page_title="iPhone Editor", layout="centered")
+st.title("📝 Dropbox Editor")
+
+# ファイル読み書き関数
 def load_file():
     try:
         _, res = dbx.files_download(FILE_PATH)
         return res.content.decode("utf-8")
     except:
-        # ファイルがない場合は初期メッセージを表示
-        return "ここに入力してください"
+        return ""
 
 def save_file(content):
-    # Dropboxへ上書き保存
     dbx.files_upload(content.encode("utf-8"), FILE_PATH, mode=dropbox.files.WriteMode.overwrite)
-    st.success("Dropboxに保存しました！")
+    st.success("保存完了！")
 
-# 画面を開いたときにデータを一度だけ読み込む
-if "content" not in st.session_state:
-    st.session_state.content = load_file()
+# データの管理
+if "text" not in st.session_state:
+    st.session_state.text = load_file()
 
-# --- 3. JavaScriptでカーソル移動ボタンを作る ---
-# iPhoneでテキストの途中を編集しやすくするための「裏技」です
-js_code = """
-<script>
-function moveCursor(offset) {
-    const textArea = window.parent.document.querySelector('textarea');
-    if (!textArea) return;
-    const start = textArea.selectionStart;
-    const newPos = start + offset;
-    textArea.setSelectionRange(newPos, newPos);
-    textArea.focus();
-}
+# --- 2. 編集エリア ---
+# 入力欄
+text_input = st.text_area("内容を編集", value=st.session_state.text, height=300)
 
-window.addEventListener('message', function(event) {
-    if (event.data.type === 'move') moveCursor(event.data.val);
-});
-</script>
-"""
-html(js_code, height=0)
+# --- 3. 【新機能】iPhoneでも動くカーソル位置指定 ---
+# ボタンがダメなら「スライダー」で文字の場所を指定します
+st.write("▼ 文字を挿入したい場所を調整（iPhone用）")
+pos = st.slider("現在の文字数（左から何文字目か）", 0, len(text_input), len(text_input))
 
-# --- 4. 編集エリアの表示 ---
-# 入力された内容は text_input という変数に入ります
-text_input = st.text_area("内容を編集", value=st.session_state.content, height=400)
-
-# --- 5. 操作ボタンの配置 ---
-st.write("▼ カーソル移動（iPhone用）")
-col1, col2 = st.columns(2)
+# 挿入したい記号などを置く
+col1, col2, col3 = st.columns(3)
 with col1:
-    if st.button("⬅️ 左へ移動", use_container_width=True):
-        html("<script>window.parent.postMessage({type: 'move', val: -1}, '*')</script>", height=0)
+    if st.button("「 」を挿入"):
+        new_text = text_input[:pos] + "「」" + text_input[pos:]
+        st.session_state.text = new_text
+        st.rerun()
+
 with col2:
-    if st.button("➡️ 右へ移動", use_container_width=True):
-        html("<script>window.parent.postMessage({type: 'move', val: 1}, '*')</script>", height=0)
+    if st.button("。 を挿入"):
+        new_text = text_input[:pos] + "。" + text_input[pos:]
+        st.session_state.text = new_text
+        st.rerun()
+
+with col3:
+    if st.button("改行を入れる"):
+        new_text = text_input[:pos] + "\n" + text_input[pos:]
+        st.session_state.text = new_text
+        st.rerun()
 
 st.divider()
 
-# 保存ボタン
+# 保存ボタンを大きく
 if st.button("💾 Dropboxに保存する", use_container_width=True):
     save_file(text_input)
