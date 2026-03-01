@@ -9,7 +9,6 @@ FILE_PATH = "/note.txt"
 st.set_page_config(page_title="iPhone Editor Pro", layout="centered")
 st.title("📝 Dropbox Editor")
 
-# ファイル読み書き関数
 def load_file():
     try:
         _, res = dbx.files_download(FILE_PATH)
@@ -19,50 +18,58 @@ def load_file():
 
 def save_file(content):
     dbx.files_upload(content.encode("utf-8"), FILE_PATH, mode=dropbox.files.WriteMode.overwrite)
-    st.success("Dropboxに保存しました！")
+    st.success("保存完了！")
 
-# --- 2. 履歴管理の初期化 ---
+# --- 2. 履歴と状態の管理 ---
 if "history" not in st.session_state:
     initial_text = load_file()
-    st.session_state.history = [initial_text]  # 過去の履歴リスト
-    st.session_state.redo_stack = []           # やり直し用リスト
+    st.session_state.history = [initial_text]
+    st.session_state.redo_stack = []
     st.session_state.current_text = initial_text
 
 # --- 3. 編集エリア ---
-# 入力欄（文字が変更されたら履歴に追加する）
-temp_text = st.text_area("内容を編集", value=st.session_state.current_text, height=300)
+# 入力されたテキストを受け取る
+input_text = st.text_area("内容を編集", value=st.session_state.current_text, height=350)
 
-# 文字が手入力で変わった場合、履歴に保存
-if temp_text != st.session_state.current_text:
-    st.session_state.history.append(temp_text)
-    st.session_state.current_text = temp_text
-    st.session_state.redo_stack = [] # 新しく書いたらやり直しスタックはクリア
+# 手入力で内容が変わった場合のみ履歴を更新
+if input_text != st.session_state.current_text:
+    st.session_state.history.append(input_text)
+    st.session_state.current_text = input_text
+    st.session_state.redo_stack = []
 
-# --- 4. 操作ボタン（元に戻す・やり直し） ---
-col1, col2, col3 = st.columns(3)
+# --- 4. 操作ボタンレイアウト ---
+st.write("▼ 編集ツール")
 
-with col1:
-    # 元に戻す (Undo)
-    if st.button("⬅️ 元に戻す", use_container_width=True):
+# 1段目：取り消し・やり直し
+col_undo, col_redo = st.columns(2)
+with col_undo:
+    if st.button("⬅️ 元に戻す (Undo)", use_container_width=True):
         if len(st.session_state.history) > 1:
-            # 現在の状態をやり直し用に保存して、一つ前の履歴に戻す
-            last_state = st.session_state.history.pop()
-            st.session_state.redo_stack.append(last_state)
+            st.session_state.redo_stack.append(st.session_state.history.pop())
             st.session_state.current_text = st.session_state.history[-1]
             st.rerun()
 
-with col2:
-    # やり直し (Redo)
-    if st.button("➡️ やり直す", use_container_width=True):
+with col_redo:
+    if st.button("➡️ やり直す (Redo)", use_container_width=True):
         if st.session_state.redo_stack:
             next_state = st.session_state.redo_stack.pop()
             st.session_state.history.append(next_state)
             st.session_state.current_text = next_state
             st.rerun()
 
-with col3:
-    if st.button("💾 保存", use_container_width=True):
-        save_file(temp_text)
+# 2段目：改行・保存
+col_nl, col_save = st.columns(2)
+with col_nl:
+    if st.button("⏎ 改行を入れる", use_container_width=True):
+        # 現在のテキストの末尾に改行を追加
+        new_text = input_text + "\n"
+        st.session_state.history.append(new_text)
+        st.session_state.current_text = new_text
+        st.rerun()
+
+with col_save:
+    if st.button("💾 Dropboxに保存", color="primary", use_container_width=True):
+        save_file(input_text)
 
 st.divider()
-st.caption("※「元に戻す」はアプリを開いてからの操作履歴に対して有効です。")
+st.caption("Tip: 改行ボタンは文章の最後にパッと改行を入れたい時に便利です。")
